@@ -107,10 +107,8 @@ function CarveLVM {
    # Convert ${PARTITIONSTR} to iterable array
    IFS=',' read -r -a PARTITIONARRAY <<< "${PARTITIONSTR}"
 
-   # Clear the MBR and partition table
-   err_exit "Clearing existing partition-tables..." NONE
-   dd if=/dev/zero of="${CHROOTDEV}" bs=512 count=1000 > /dev/null 2>&1 || \
-     err_exit "Failed clearing existing partition-tables"
+  # Clear the target-disk of partitioning and other structural data
+  CleanChrootDiskPrtTbl
 
    # Lay down the base partitions
    err_exit "Laying down new partition-table..." NONE
