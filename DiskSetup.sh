@@ -205,10 +205,10 @@ function CleanChrootDiskPrtTbl {
   local PART_NUM
   local PDEV
 
-  HAS_PARTS="$(
+  HAS_PARTS="$( \
     parted -s "${CHROOTDEV}" print | \
     sed -e '1,/^Number/d' \
-        -e '/^$/d'
+        -e '/^$/d' \
   )"
 
   # Ensure there's actually partitions to clear
