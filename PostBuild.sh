@@ -10,7 +10,8 @@ CHROOTMNT="${CHROOT:-/mnt/ec2-root}"
 DEBUG="${DEBUG:-UNDEF}"
 FIPSDISABLE="${FIPSDISABLE:-UNDEF}"
 GRUBTMOUT="${GRUBTMOUT:-5}"
-MAINTUSR="${MAINTUSR:-"maintuser"}"
+# MAINTUSR="${MAINTUSR:-"maintuser"}"
+MAINTUSR="${MAINTUSR:-"ec2-user"}"
 NOTMPFS="${NOTMPFS:-UNDEF}"
 TARGTZ="${TARGTZ:-UTC}"
 SUBSCRIPTION_MANAGER="${SUBSCRIPTION_MANAGER:-disabled}"
@@ -50,6 +51,14 @@ function UsageMsg {
 
 # Clean yum/DNF history
 function CleanHistory {
+   err_exit "Remove spel-release package..." NONE
+   chroot "${CHROOTMNT}" yum erase -y spel-release || \
+     err_exit "Failed removing spel-release package"
+
+   err_exit "Remove epel-release package..." NONE
+   chroot "${CHROOTMNT}" yum erase -y epel-release || \
+     err_exit "Failed removing epel-release package"
+
   err_exit "Executing yum clean..." NONE
   chroot "${CHROOTMNT}" yum clean --enablerepo=* -y packages || \
     err_exit "Failed executing yum clean"
@@ -202,10 +211,9 @@ function ConfigureCloudInit {
       printf "   name: '%s'\n" "${MAINTUSR}"
       printf "   lock_passwd: true\n"
       printf "   gecos: Local Maintenance User\n"
-      printf "   groups: [wheel, adm]\n"
-      printf "   sudo: ['ALL=(root) TYPE=sysadm_t ROLE=sysadm_r NOPASSWD:ALL']\n"
+      printf "   groups: [wheel, adm, systemd-journal]\n"
+      printf "   sudo: ['ALL=(ALL) NOPASSWD:ALL']\n"
       printf "   shell: /bin/bash\n"
-      printf "   selinux_user: staff_u\n"
       printf "  distro: rhel\n"
       printf "  paths:\n"
       printf "   cloud_dir: /var/lib/cloud\n"
