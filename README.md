@@ -1,107 +1,74 @@
 # Introduction
 
-This project contains the build-automation for creating LVM-enabled Enterprise
-Linux 9 AMIs for use in AWS envrionments. Testing and support will be given to
-RHEL 9 and CentOS 9-stream. Other EL9-derivatives should also work. However,
-there are currently no plans by the project-owners to specifically verify
-compatibility with other RHEL9-adjacent distributions.
+This project contains the build-automation for creating LVM-enabled Enterprise Linux 8 AMIs for use in AWS envrionments. Testing and support will be given to RHEL 8 and CentOS8. Other EL8-derivatives should also work, but will not be specifically tested by the project-owners.
 
-## Purpose
+## Status
 
-The DISA STIGs specify that root/operating-system drive _must_ have a specific,
-minimum set of partitions present. Because re-partitioning the root drive is not
-practical once a system &ndash; particularly one that is cloud-hosted &ndash; is
-booted, this project was undertaken to ensure that VM templates (primarily
-Amazon Machine Images) would be available to create virtual machines (primarily
-EC2s) that would have the STIG-mandated partitioning-scheme "from birth".
+Recent needs have caused us to have to move ahead with this project, even in the absence of an official AMI published to the AWS MarketPlace by CentOS.Org.
 
-As of the RHEL 9 v1r1 STIG release, the following minimum set of partitions are
-required:
+As of this writing (April 17<sup>th</sup>, 2020), the project-content is "first pass". It produces a CentOS 8.1.1911 AMI. The AMI has a default root-EBS of 20GiB. That EBS is organized via a GPT partition table. The boot record is stored on the EBS's first slice. The first slice is 16MiB in size and does not contain a filesystem. The CentOS 8 operating system is installed to the root-EBS's second slice. The second slice is nearly 20GiB in size and is subdivided as follows:
 
-* `/home` (per: V-257843/RHEL-09-231010)
-* `/tmp` (per: V-257844/RHEL-09-231015)
-* `/var` (per: V-257845/RHEL-09-231020)
-* `/var/log` (per: V-257846RHEL-09-231025)
-* `/var/log/audit` (per: V-257847/RHEL-09-231030)
-* `/var/tmp` (per: V-257848 /RHEL-09-231035)
-
-The images published by this project owner to AWS &ndash; in the commercial and
-GovCloud partitions &ndash; have a filesystem layout that looks like:
-
-~~~bash
-# df -PH
-Filesystem                    Size  Used Avail Use% Mounted on
-devtmpfs                      4.2M     0  4.2M   0% /dev
-tmpfs                         4.1G     0  4.1G   0% /dev/shm
-tmpfs                         1.7G  9.0M  1.7G   1% /run
-/dev/mapper/RootVG-rootVol    4.3G  1.7G  2.7G  38% /
-tmpfs                         4.1G     0  4.1G   0% /tmp
-/dev/mapper/RootVG-homeVol    1.1G   42M  1.1G   4% /home
-/dev/nvme0n1p3                508M  231M  277M  46% /boot
-/dev/mapper/RootVG-varVol     2.2G  232M  2.0G  11% /var
-/dev/nvme0n1p2                256M  7.4M  249M   3% /boot/efi
-/dev/mapper/RootVG-logVol     2.2G   68M  2.1G   4% /var/log
-/dev/mapper/RootVG-varTmpVol  2.2G   50M  2.1G   3% /var/tmp
-/dev/mapper/RootVG-auditVol   6.8G   82M  6.7G   2% /var/log/audit
-tmpfs                         819M     0  819M   0% /run/user/1000
+~~~
+Filesystem                   Size  Used Avail Use% Mounted on
+devtmpfs                     922M     0  922M   0% /dev
+tmpfs                        958M     0  958M   0% /dev/shm
+tmpfs                        958M  426k  958M   1% /run
+tmpfs                        958M     0  958M   0% /sys/fs/cgroup
+/dev/mapper/RootVG-rootVol   4.3G  2.0G  2.4G  46% /
+tmpfs                        958M  4.1k  958M   1% /tmp
+/dev/mapper/RootVG-varVol    2.2G  200M  2.0G  10% /var
+/dev/mapper/RootVG-homeVol   1.1G   42M  1.1G   4% /home
+/dev/mapper/RootVG-logVol    2.2G   67M  2.1G   4% /var/log
+/dev/mapper/RootVG-auditVol  9.7G  102M  9.6G   2% /var/log/audit
+tmpfs                        192M     0  192M   0% /run/user/1000
 ~~~
 
-Users of this automation can customize both which partitions to make on the root
-disk as well as what size and filesystem-type to make them. Consult the
-`DiskSetup.sh` utility's help pages for guidance.
+The installed operating system is derived from the "Core" RPM-group. In addition to the RPM-group's contents, the following CentOS RPMs (and dependencies) are included:
 
-# Further Security Notes
+- chrony
+- cloud-init
+- cloud-utils-growpart
+- dhcp-client
+- dracut-config-generic
+- firewalld
+- gdisk
+- grub2-pc-modules
+- grub2-tools
+- grub2-tools-minimal
+- grubby
+- kernel
+- kexec-tools
+- lvm2
+- rng-tools
+- unzip
 
-Additionally, the system-images produced by this automation allows the following
-system-security features to be enabled:
+Further, the AMI has been enabled with three AWS utility-packages (and associated dependencies):
 
-* FIPS 140-2 mode
-* SELinux &ndash; set to either `Enforcing` (preferred) or `Permissive`
-* UEFI support (to support system-owner's further ability to enable [SecureBoot](https://access.redhat.com/articles/5254641)
-  and other Trusted-Computing capabilities)
+- SSM Agent: The agent starts at EC2 launch and will result in the instance showing up in the account's SSM management-inventory
+- AWS CLI v1 available if `/usr/local/bin` is in the user's or processes's `PATH` env. This path is linked from binaries in `/opt/aws/cli/bin`
+- AWS CLI v2 available if `/usr/bin` is in the user's or processes's `PATH` env. This path is linked from binaries in `/opt/aws/cli/v2/bin`. 
 
-This capability is offered as some organizations' security-auditors not only
-require that some or all of these features be enabled, but that they be enabled
-"from birth" (i.e., a configuraton-reboot to activate them is not sufficient).
+Note<sup>1</sup>: If there is a preference for v1 or v2 of the AWS CLI, it will be necessary to order the user's or process's `PATH` env appropriately. Both have been verified to work as expected when a suitable instance-role is applied to the instance.
 
-As of the writing of this guide:
-* FIPS mode is enabled (verify with `fips-mode-setup --check`)
-* SELinux is set to `Enforcing` (verify with `getenforce`)
-* UEFI is available (verify with `echo $( [[ -d /sys/firmware/efi/ ]] )$?` or
-  `dmesg | grep -i EFI`)
+Note<sup>2</sup>: This project has no yet been proven to create functional RHEL 8 AMIs. Relevant testing and updates will occur "soon".
 
-Lastly, host-based firewall capabilities are enabled via the `firewalld`
-service. The images published by this project's owners only enable two services:
-`sshd` and `dhcpv6-client`. All other services and ports are blocked by default.
-These settings may be validated using `firewall-cmd --list-all`.
+Note<sup>3</sup>: This project's scripts will also be usable to produce "bare partitioned" (no LVM2 used) AMIs. This functionality is primarily for project-maintainers' internal use and will not be extensively tested. As wih RHEL 8 capabilities, relevant baseline-functionality testing and updates will occur "soon".
 
-# Software Loadout and Updates
 
-The Red Hat images published by this project's owners make use of the `@core`
-RPM package-group plus select utilities to cloud-enable the resulting images
-(e.g. `cloud-init` and CSP-tooling like Amazon's SSM Agent and AWS CLI).
+## About the scripts
 
-The Red Hat images published by this project's owners make use of the
-official Red Hat repositories managed by Red Hat on behalf of the CSP. If these
-repositories will not be suitable to the image-user, it will be necessary for
-the image-user to create their own images. The `OSpackages.sh` script accepts
-arguments that allow the configuration of custom repositories and RPMs (the
-script requires custom repositories be configured by site repository-RPMs)
+Each script accepts several flags to govern/customize operation. Similarly, each script can also be driven by setting appropriate environment variable values. For usage-summaries, each script may be invoked with a `-h` (or `--help`) flag. Primary flagging is via short-options; GNU-style long-options will reference their corresponding short-options in the usage-summaries.
 
-# CSP Enablement
+The scripts should be used in the following order:
 
-The image build-automation also includes the option to bake in CSP-specific tooling.
+1. [DiskSetup.sh](docs/README_DiskSetup.md): Configures chroot-dev target-disk
+1. [MkChrootTree.sh](docs/README_MkChrootTree.md): Mount's chroot-dev target-disk 
+1. [OSpackages.sh](docs/README_OSpackages.md): Installs base OS RPMs into chroot-dev target-disk 
+1. [AWSutils.sh](docs/README_AWSutils.md): Installs AWS utilities and dependencies into chroot-dev target-disk 
+1. [PostBuild.sh](docs/README_PostBuild.md): Readies chroot-dev target-disk to be turned into an AMI
+1. [Umount.sh](docs/README_Umount.md): Unmounts (and optionally nulls) the chroot-dev target-disk
 
-Note: As of this writing, the only CSP-enablement included in this project has been for AWS. If enablement for other CSPs is desired, it is recommended that users of this project contribute suitable automation and documentation.
 
-## AWS Enablement
+After the `Umount.sh` script has executed, it will be safe to snapshot the build-targe EBS. Once the snapshot completes, an AMI can be safely registered.
 
-AWS-enablement is provided through the [AWSutils.sh](AWSutils.sh) script. This script can install:
-
-* AWS CLI v2: See the AWS CLI [Getting Started](https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html) page for default, AWS-managed locations for the AWS CLI v2 installers
-* AWS CloudFormation bootstrapper (cfn-bootstrap): See ["CloudFormation helper scripts reference"](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-helper-scripts-reference.html#cfn-helper-scripts-reference-downloads) for default, AWS-managed locations for the `cfn-bootstrap` Python modules
-* AWS SSM Agent: See the _AWS Systems Manager_ document's [Quick Installation Commands](https://docs.aws.amazon.com/systems-manager/latest/userguide/agent-install-rhel-8-9.html#quick-install-rhel-8-9) section for default, AWS-managed locations for the Amazon SSM Agent RPM
-
-This scriipt can also enable arbitrary systemd services. Typically, this will just be the `amazon-ssm-agent` service.
-
-Invoke the `./AWSutils.sh` with either the `-h` or `--help` for the list of flags necessary to specify the above installation-options.
+Each of the scripts has been tested via interactive use. Each *should* work when automated through a framework like HashiCorp's Packer.
